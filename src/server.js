@@ -5,13 +5,11 @@ import fs from 'fs';
 import { promises as fsp } from 'fs';
 import path from 'path';
 import os from 'os';
-import { fileURLToPath } from 'url';
 import { v4 as uuid } from 'uuid';
 import sharp from 'sharp';
 import { promisify } from 'util';
 import stream from 'stream';
-import Poppler from 'pdf-poppler';
-import tmp from 'tmp';
+import { execFile } from 'child_process';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -20,6 +18,7 @@ const app = express();
 app.use(express.json({ limit: '10mb' }));
 
 const pipeline = promisify(stream.pipeline);
+const execFileAsync = promisify(execFile);
 const DEFAULT_BUCKET = process.env.CONVERSION_DEFAULT_BUCKET || 'editions';
 const SERVICE_SECRET = process.env.CONVERSION_SERVICE_SECRET || '';
 const PORT = Number(process.env.PORT || 3000);
@@ -54,20 +53,16 @@ const removeDirSafe = async (dirPath) => {
 };
 
 const convertPdfToPng = async (pdfPath, outputDir, dpi = 300) => {
-  const poppler = new Poppler();
-  const options = {
-    format: 'png',
-    out_dir: outputDir,
-    out_prefix: 'page',
-    page: '',
-    dpi,
-  };
-
-  await poppler.convert(pdfPath, options);
+  const prefix = path.join(outputDir, 'page');
+  try {
+    await execFileAsync('pdftoppm', ['-png', '-r', String(dpi), pdfPath, prefix]);
+  } catch (error) {
+    throw new Error(`pdftoppm failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
 
   const files = await fsp.readdir(outputDir);
   return files
-    .filter((file) => file.endsWith('.png'))
+    .filter((file) => file.startsWith('page') && file.endsWith('.png'))
     .sort((a, b) => {
       const pageA = parseInt(a.match(/(\d+)\.png$/)?.[1] ?? '0', 10);
       const pageB = parseInt(b.match(/(\d+)\.png$/)?.[1] ?? '0', 10);
