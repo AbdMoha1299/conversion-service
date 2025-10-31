@@ -1,5 +1,5 @@
 [phases.setup]
-nixpkgs = ["poppler"]
+nixpkgs = ["poppler", "libvips"]
 
 [phases.build]
 cmds = ["npm install"]
